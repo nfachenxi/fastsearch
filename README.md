@@ -185,17 +185,17 @@ uv run --extra test pytest -q -p no:cacheprovider --basetemp="$env:TEMP/fs-test"
 
 临时目录放在仓库外，避免在工作区留下测试文件夹。测试会调用真实的 fd/rg 二进制，覆盖这些场景：gitignore（包括非 git 目录）、默认排除目录、隐藏文件、中文文件名、GBK 编码、CRLF、超长行裁剪、截断提示、多行匹配、二进制文件、旧路径限制变量不再生效、一次完整的 MCP stdio 往返调用，以及纯搜索部署版的生成与自检。已验证兼容 mcp SDK 1.x 和 2.x、ripgrep 13 和 15。每次推送到 GitHub 会在 Windows 上自动运行同样的测试（`.github/workflows/ci.yml`）。
 
-### 发布流程
+### 发布流程（自动）
 
-1. 改 `pyproject.toml` 和 `src/fastsearch_mcp/__init__.py` 里的版本号，测试通过后提交。
-2. 本地生成并自检部署版（可选，CI 也会做）：
+发布由版本号驱动，不需要手动打标签或上传文件：
 
-   ```powershell
-   uv run python scripts/bundle.py searchonly        # 生成 dist/Fastsearch-MCP-Share 和 .zip
-   ```
+1. 同时修改 `pyproject.toml` 和 `src/fastsearch_mcp/__init__.py` 里的版本号，测试通过后提交并推送到 `main`。
+2. `.github/workflows/release.yml` 在每次推送 `main` 时检查：该版本已有 Release 就跳过；没有则在 Windows 上测试、生成部署版、解压安装并运行包内 check.py，全部通过后创建 `v<版本号>` 标签和 GitHub Release，附上 `Fastsearch-MCP-Share.zip` 和 `.sha256` 校验文件，说明由 PR 和提交自动汇总。
+3. 版本号以 `aN` / `bN` / `rcN` / `devN` 结尾（如 `0.4.0rc1`）时发布为预发布版。两处版本号不一致时流程直接失败，不会发布。
+4. 也可以在 Actions 页面选择 release 工作流，点 “Run workflow” 手动触发，规则相同。
+5. 按下一节更新本机全局安装。
 
-3. 打标签并推送：`git tag v0.3.1; git push origin main v0.3.1`。`.github/workflows/release.yml` 会在 Windows 上测试、生成部署版、运行包内 check.py，然后把 zip 附到同名 GitHub Release。
-4. 按下一节更新本机全局安装。
+本地预览部署版（不发布）：`uv run python scripts/bundle.py searchonly`，产物在 `dist/`。
 
 ### 更新本机全局安装
 
