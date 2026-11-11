@@ -1,0 +1,59 @@
+[
+  {
+    "tool": "fd",
+    "version": "10.5.2",
+    "license": "MIT OR Apache-2.0",
+    "downloads": [
+      {
+        "url": "https://github.com/sharkdp/fd/releases/download/v10.5.2/fd-v10.5.2-x86_64-pc-windows-msvc.zip",
+        "sha256": "7edac75ef96b7e9a01ebb251a21ee86ea365a09adcfb865f1ec3346a906153b6",
+        "verified": "no upstream checksum; pinned on first download 2026-11-11",
+        "extract": {
+          "fd-v10.5.2-x86_64-pc-windows-msvc/fd.exe": "fd.exe",
+          "fd-v10.5.2-x86_64-pc-windows-msvc/LICENSE-MIT": "LICENSE-MIT",
+          "fd-v10.5.2-x86_64-pc-windows-msvc/LICENSE-APACHE": "LICENSE-APACHE"
+        }
+      }
+    ]
+  },
+  {
+    "tool": "rg",
+    "version": "15.2.0",
+    "license": "MIT OR Unlicense",
+    "downloads": [
+      {
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+        "sha256": "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5",
+        "verified": "matches upstream .sha256 release asset",
+        "extract": {
+          "ripgrep-15.2.0-x86_64-pc-windows-msvc/rg.exe": "rg.exe",
+          "ripgrep-15.2.0-x86_64-pc-windows-msvc/COPYING": "COPYING",
+          "ripgrep-15.2.0-x86_64-pc-windows-msvc/LICENSE-MIT": "LICENSE-MIT",
+          "ripgrep-15.2.0-x86_64-pc-windows-msvc/UNLICENSE": "UNLICENSE"
+        }
+      }
+    ]
+  },
+  {
+    "tool": "ilspycmd",
+    "version": "11.2.0.10050",
+    "license": "MIT",
+    "note": "Native AOT build: self-contained, needs no .NET runtime.",
+    "downloads": [
+      {
+        "url": "https://api.nuget.org/v3-flatcontainer/ilspycmd.win-x64/11.2.0.10050/ilspycmd.win-x64.11.2.0.10050.nupkg",
+        "sha256": "b67478eb22fedff149c37e7dd4512d716c5e1dbe7425a591ae8cf8eb773da158",
+        "verified": "pinned on first download 2026-11-11 from nuget.org",
+        "extract": {
+          "tools/any/win-x64/ilspycmd.exe": "ilspycmd.exe"
+        }
+      },
+      {
+        "url": "https://raw.githubusercontent.com/icsharpcode/ILSpy/c86190ef4e24f3137c13a9275316042842d2fada/LICENSE",
+        "sha256": "5527fe802347740da8ec2b510cffa4d22939c7f0773ae342a85a2e2b64e4a34b",
+        "verified": "ILSpy LICENSE at the commit named in the package nuspec",
+        "save_as": "LICENSE"
+      }
+    ]
+  }
+]

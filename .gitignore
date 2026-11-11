@@ -1,0 +1,36 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Build and generated reports
+build/
+dist/
+output/
+reports/
+*.zip
+
+# Local test runs and usage data
+.test-*/
+usage-log/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Local-only material: usage data and analyses for internal talks; never published
+private/
+
+# Local editor and OS files
+.claude/
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
+# Bundled executables: fetched by scripts/bundle.py
+**/src/fastsearch_mcp/bin/

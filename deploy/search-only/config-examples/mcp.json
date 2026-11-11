@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "fastsearch": {
+      "command": "C:/Tools/Fastsearch-MCP-Share/.venv/Scripts/fastsearch-mcp.exe"
+    }
+  }
+}

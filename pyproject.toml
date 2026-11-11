@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fastsearch-mcp"
+version = "0.3.0"
+description = "MCP server giving AI agents fast, gitignore-aware file & text search via fd and ripgrep, plus version-pinned .NET decompile snapshots (Windows-friendly)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "mcp>=1.10",
+    "pydantic>=2",
+]
+
+[project.scripts]
+fastsearch-mcp = "fastsearch_mcp.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/nfachenxi/fastsearch"
+Releases = "https://github.com/nfachenxi/fastsearch/releases"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fastsearch_mcp"]
+
+[tool.hatch.build]
+# Bundled executables are git-ignored but must still ship in the wheel.
+artifacts = ["src/fastsearch_mcp/bin/**"]

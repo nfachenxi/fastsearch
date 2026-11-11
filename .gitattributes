@@ -1,0 +1,12 @@
+# Store text with LF in the repository; check out with each platform's native endings
+# except where a tool needs a fixed one.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.exe binary
+*.dll binary
+*.zip binary
+*.png binary
+*.sqlite3 binary

@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Fetch pinned fd / rg / ilspycmd
+        run: uv run python scripts/bundle.py fetch
+      - name: Test
+        run: uv run --extra test pytest -q -p no:cacheprovider --basetemp="$env:RUNNER_TEMP/fs-test"
