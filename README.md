@@ -1,116 +1,82 @@
-# fastsearch-mcp
+# FastSearch MCP
 
-基于 [fd](https://github.com/sharkdp/fd) 和 [ripgrep](https://github.com/BurntSushi/ripgrep) 的 MCP 服务器，给任意 Agent（Claude Desktop / Claude Code / Cursor / Cline / Codex / Continue 等）提供快速、可靠、默认尊重 `.gitignore` 的文件查找与文本搜索。重点针对 Windows 上 Agent 常见的几类问题：
+让 AI 助手更方便地查文件、搜代码、读内容，重点照顾 Windows 上的使用体验。
 
-| Agent 在 Windows 上的典型问题 | 本项目的处理 |
+你只需要像平时一样告诉 AI 要找什么。连接 FastSearch MCP 后，AI 就能使用这里的工具完成搜索，不必每次临时编写搜索命令。MCP 是 AI 助手连接外部工具的一种方式。
+
+适用于支持 MCP 的客户端，例如 Claude Desktop、Claude Code、Codex、Cursor 和 Cline。
+
+## 为什么使用 FastSearch
+
+| **Agent 在 Windows 上的典型问题** | **本项目的处理** |
 | --- | --- |
-| `Get-ChildItem -Recurse` / `dir /s` / `findstr` 很慢，钻进 `node_modules`、`.git` | fd/rg 并行遍历，默认尊重 `.gitignore`（非 git 目录也生效），并内置常见排除目录 |
-| 输出动辄几万行，撑爆上下文 | 所有工具都有结果上限、长行裁剪（压缩过的 js 文件也不会刷屏），截断时明确提示下一步怎么缩小范围 |
-| 路径格式混乱：`C:\x`、`C:/x`、`/c/x`、`/mnt/c/x` | 统一规范化为 Windows 原生绝对路径 |
-| GBK 老文件搜不到中文 / 读出来是乱码 | `search_text` 支持 `encoding="gbk"`；`read_lines` 自动识别 UTF-8 / UTF-16 BOM / GB18030 |
-| CRLF 导致正则 `$` 匹配失败 | rg 默认启用 `--crlf` |
-| PowerShell 引号、转义把正则搞坏 | 参数直接传给进程，不经过 shell |
-| 子进程弹黑框、卡死 | `CREATE_NO_WINDOW` 启动 + 超时强杀（默认 30 秒） |
-| 本机没装 fd / rg | 分享包随带 Windows x64 fd/rg；开发安装先查 PATH，找不到就自动从 GitHub Release 下载到缓存目录（支持镜像和代理） |
-| 反编译 DLL 的副本不知道对应哪个版本，反复重新反编译 | `decompile` 按 DLL 内容哈希和反编译器版本各导出一次快照，之后直接命中缓存 |
+| 搜索大项目时，花很多时间翻依赖、缓存等无关目录 | 默认跳过常见的依赖和缓存目录，并遵守项目的忽略规则 |
+| 一次返回成千上万行，AI 很难抓住重点 | 限制结果数量和内容长度，支持只看文件名或指定几行 |
+| Windows 路径写法不统一，容易找错位置 | 识别常见路径写法，统一后再查找 |
+| 老项目里的中文搜不到，读出来又是乱码 | 读取时自动识别常见编码，搜索时可以指定 GBK 等编码 |
+| 搜索词带引号、括号或反斜杠，命令容易出错 | 直接把搜索条件交给工具，减少命令行转义造成的问题 |
+| 搜索时弹出黑色窗口，或长时间没有响应 | Windows 下隐藏搜索进程窗口，超时后停止并提示 |
+| 换台电脑还要单独找齐搜索工具 | 分享版附带所需的 Windows x64 程序，按说明安装即可 |
+| 反复导出同一个 DLL，或者误读更新前的代码 | 按 DLL 内容和导出工具版本保存副本，相同版本复用，更新后重新生成 |
 
-## 两种版本
+## 它能帮你做什么
 
-| 版本 | 内容 | 获取方式 |
-| --- | --- | --- |
-| 开发版（本仓库） | 六个工具，加上本机使用记录、离线报告 `report`、PowerShell 对照 `compare` | `git clone` 后本地安装，见下文“安装” |
-| 纯搜索部署版 `Fastsearch-MCP-Share` | 同样六个工具，不含使用记录模块，什么都不记录；附 Windows x64 fd/rg/ilspycmd、安装脚本、AI 安装说明和自检 | [GitHub Releases](https://github.com/nfachenxi/fastsearch/releases) 下载 zip |
+你可以这样对 AI 说：
 
-两者共用 `src/fastsearch_mcp` 同一份源码。部署版由 `scripts/bundle.py searchonly` 从本仓库生成：复制 `deploy/search-only/` 的模板和搜索模块，去掉 `telemetry.py`、`report.py`、`compare.py` 和报告页面，版本号加 `+searchonly`。源码在缺少 `telemetry` 模块时自动不记录，所以两版不会再出现手工同步的差异。
+- “先看看这个项目的目录，告诉我代码主要放在哪里。”
+- “帮我找到 PlayerController 这个脚本。”
+- “查一下哪些文件用到了这个函数。”
+- “只读这个文件的第 100 到 150 行。”
+- “这个项目只有 DLL，帮我导出可以查看的 C# 代码，再找一下相关逻辑。”
 
-## 提供的工具
+FastSearch 默认遵守项目的 `.gitignore`，并跳过 `.git`、`node_modules`、`.venv` 等通常不需要搜索的目录。它会控制返回内容的长度，结果太多时提醒 AI 缩小范围，避免一次返回大量无关内容。
 
-| 工具 | 作用 | 替代的命令 |
-| --- | --- | --- |
-| `tree` | 精简目录树（按深度展开，大目录自动折叠为 `… (+N more)`） | `tree`, `ls -R` |
-| `find_files` | 按文件名 glob/正则、扩展名、类型、修改时间、大小查找 | `dir /s`, `Get-ChildItem`, `find` |
-| `count_matches` | 统计每个文件里的匹配数，按数量降序排列；先看分布再决定看哪里 | `rg -c` |
-| `search_text` | 搜索文件内容，按文件分组，可带上下文行 | `findstr`, `Select-String`, `grep` |
-| `read_lines` | 读取文件的指定行范围，带行号，自动识别编码 | `type`, `Get-Content`, `sed -n` |
-| `decompile` | 把 .NET DLL 整体反编译成快照（随包 ilspycmd 11.2，Native AOT，无需 .NET）；传 `type` 直接返回该类型源码 | `ilspycmd -p -o ...` |
+它还处理了 Windows 常见的路径写法、中文文件名和部分旧文件的中文编码问题。底层搜索使用 [fd](https://github.com/sharkdp/fd) 和 [ripgrep](https://github.com/BurntSushi/ripgrep)。
 
-除 `decompile` 外的工具都标注为只读（`readOnlyHint`），不会修改被搜索文件；`decompile` 只写自己的快照目录 `%LOCALAPPDATA%/fastsearch-mcp/decompile`。默认会在本地应用数据目录记录调用元数据。
+## 选择哪个版本
 
-## 使用记录与离线分析面板
+**日常使用，推荐下载分享版。** 从 [Releases](https://github.com/nfachenxi/fastsearch/releases) 下载 `Fastsearch-MCP-Share.zip`。它包含全部六个工具、所需的 Windows x64 程序、安装脚本和自检程序，不记录调用历史。
 
-每次进入工具执行入口的调用默认写入 `%LOCALAPPDATA%/fastsearch-mcp/usage.sqlite3`。记录时间、工具、路径、查询参数、版本、耗时、输出大小、错误与结果限制，不保存返回源码正文。查询词和错误摘要为明文，数据只保存在本机，不自动删除。
-
-```powershell
-fastsearch-mcp report --days 30
-fastsearch-mcp report --days 7 --output ./reports/fastsearch.html
-```
-
-打开命令输出的 HTML 路径即可离线查看。支持上海日期、工具、路径和状态筛选，P50/P95、每日趋势、工具分布、慢调用排序以及逐条参数详情。每页显示 12 条，但统计包含整个筛选结果。重新执行命令才能更新快照。
-
-环境变量：`FASTSEARCH_TELEMETRY=0` 关闭记录；`FASTSEARCH_TELEMETRY_DIR` 指定存储目录。测试使用临时目录，不混入日常记录。写入失败不会中断搜索，诊断发送到 stderr。多进程竞争时最多等待数据库锁 0.5 秒；失败的记录可能缺失。
-
-统计口径：耗时包含服务内线程等待，不包含数据库写入、客户端网络或模型思考；P50/P95 使用 nearest-rank，空数据展示 0。错误、超时、扫描不完整、展示受限分别记录，可以重叠。`search_text` 计匹配事件，`count_matches` 计匹配次数，其他工具计条目或行，不能跨工具相加。无结果不等于错误，按范围读文件不算截断。SDK 在包装器前拒绝的参数、连接失败与进程强制退出不保证有记录。
-
-安装后需要重新加载客户端 MCP 连接，新启动的服务才会启用记录。纯搜索部署版不含此功能，`report` / `compare` 会提示不可用。
-
-性能验证：`uv run python benchmarks/usage_benchmark.py --output benchmarks/results.json`。脚本使用 300 个 UTF-8 文件、每个 31 行，交替测量开关记录的 30 轮稳定调用，同时与 Python pathlib 搜索核对结果。它不代表 PowerShell、真实大型项目或任务总耗时的提升；原始样本会保留。
-
-Agent 按当前问题直接选择工具，无需机械执行整条调用链：已知文件和行号直接 `read_lines`；已知文件名用 `find_files`；已知文本用 `search_text`；常见词需要分布时用 `count_matches`；不熟悉目录时再用 `tree`。
-
-### 减少扫描和输出
-
-- `read_lines(..., count_total=false)`：读取目标范围后只多取一行判断是否还有内容，返回 `has_more=true` 和下一次起始行，不为统计总行数扫描到末尾。默认 `count_total=true` 保留原有准确总行数输出；读取靠近文件末尾的范围仍需跳过前面的行。
-- `search_text(..., output="files")`：只返回包含匹配的文件路径，每个文件在首次匹配后停止，不统计全部出现次数。`max_results` 在此模式下限制文件数，默认 `output="content"` 保留正文模式。上下文及 `max_per_file` 仅用于正文模式。
-- `search_text(..., max_output_chars=24000)`：限制整个成功结果的字符数，包括路径、标题和上下文；允许 1024–1000000。达到预算时提前停止收集，提示 `TRUNCATED`，应缩小范围或提高预算。字符数不是 token 数；操作错误仍通过 `isError=true` 返回诊断。
-- Windows 的 `full_path=true` 路径 glob 使用 `/`，例如 `**/pkg/*.py`；`*` 不跨目录，`**` 匹配多层目录。
-- 多行正则若需兼容 LF 和 CRLF，使用 `\r?\n`，例如 `class Foo:\r?\n\s+pass`。
-- `search_text` 的正则无法解析时（如 `Awake|Start(|Init`、`humanObjects[`），按 `|` 拆开逐段当字面量重搜一次，结果首行标注 `NOTE: invalid regex; searched literally for: …`，使用记录标记 `regex_fallback=true`、状态为警告。`count_matches` 仍直接报错。
-
-例：`search_text(path="C:/proj/src", pattern="PlayerController", literal=true, output="files", relative=true)`；定位文件后直接按范围读取。
-
-输出示例（`search_text`，`context=1`，`relative=true`）：
-
-```
-3 match(es) in 2 file(s) under C:\proj\src (TRUNCATED at max_results=3; use count_matches ...)
-
-app/main.py
-  9-
-  10: def main(argv: list[str] | None = None) -> None:
-  11-     ap = argparse.ArgumentParser(...)
-
-app/search.py
-  26-
-  27: def _env_list(name: str, default: list[str]) -> list[str]:
-  28-     raw = os.environ.get(name)
-```
-
-输出用的是精简文本，不是 JSON，这样对 LLM 更省 token，也更容易读懂（`行号:` 是匹配行，`行号-` 是上下文行，`--` 表示中间跳过了一段）。
+**需要改代码或查看使用情况，可以安装本仓库的开发版。** 开发版额外提供本机调用记录和离线报告。两个版本的搜索功能来自同一份源码。
 
 ## 安装
 
-需要 Python ≥ 3.10 和 [uv](https://docs.astral.sh/uv/)（Windows：`winget install astral-sh.uv`）。
-
-**纯搜索部署版**：从 [Releases](https://github.com/nfachenxi/fastsearch/releases) 下载 `Fastsearch-MCP-Share.zip`，解压到固定位置，按包内 README.md 运行 `01-install.ps1`，或把包内 AI-INSTALL.md 交给有终端权限的 AI 助手执行。
-
-**开发版**（全局安装，Codex / Claude Code 等客户端直接启动 `fastsearch-mcp`）：
+需要 Python 3.10 或更新版本，以及 [uv](https://docs.astral.sh/uv/)。Windows 上可以用下面的命令安装 uv：
 
 ```powershell
-git clone git@github.com:nfachenxi/fastsearch.git C:\tools\fastsearch
-cd C:\tools\fastsearch
-uv run python scripts/bundle.py fetch      # 把固定版本的 fd/rg/ilspycmd 放进 src/fastsearch_mcp/bin/
-uv tool install --force .
-fastsearch-mcp --doctor                    # 查看最终会用哪个 fd/rg
+winget install astral-sh.uv
 ```
 
-也可以不克隆直接安装：`uv tool install git+https://github.com/nfachenxi/fastsearch@v0.3.0`。这种方式没有随包二进制：fd/rg 先查 PATH，找不到时自动从 GitHub Release 下载到缓存目录；ilspycmd 不会自动下载，需自行安装（`dotnet tool install -g ilspycmd`）或设置 `FASTSEARCH_ILSPYCMD_PATH`，否则 `decompile` 不可用。
+### 分享版
 
-PATH 上版本过旧的 fd/rg 会被跳过（fd < 8.7 / rg < 11）。
+1. 从 [Releases](https://github.com/nfachenxi/fastsearch/releases) 下载 `Fastsearch-MCP-Share.zip`。
+2. 解压到一个准备长期保留的位置。
+3. 按包内 `README.md` 运行 `01-install.ps1`。
+4. 用安装脚本输出的程序路径配置 AI 客户端。
 
-## 接入各个客户端
+也可以把包内的 `AI-INSTALL.md` 交给有终端权限的 AI 助手，让它按说明安装。
 
-下面以全局安装得到的 `fastsearch-mcp` 命令为例；部署版的 `command` 填安装脚本输出的 `.venv\Scripts\fastsearch-mcp.exe` 绝对路径。
+### 从源码安装
 
-**Claude Desktop**：编辑 `%APPDATA%\Claude\claude_desktop_config.json`
+在 PowerShell 中执行：
+
+```powershell
+git clone https://github.com/nfachenxi/fastsearch.git C:\tools\fastsearch
+cd C:\tools\fastsearch
+uv run python scripts/bundle.py fetch
+uv tool install --force .
+fastsearch-mcp --doctor
+```
+
+其中 `fetch` 会下载搜索和 DLL 代码导出所需的程序，`--doctor` 用来检查 fd 和 ripgrep 是否可用。
+
+## 连接 AI 客户端
+
+下面的示例使用从源码安装后得到的 `fastsearch-mcp` 命令。**分享版请把命令替换为安装脚本输出的完整程序路径**，路径以 `.venv\Scripts\fastsearch-mcp.exe` 结尾。
+
+### Claude Desktop
+
+在 `%APPDATA%\Claude\claude_desktop_config.json` 中添加以下配置；已有其他工具时，把 `fastsearch` 合并进去：
 
 ```json
 {
@@ -122,123 +88,171 @@ PATH 上版本过旧的 fd/rg 会被跳过（fd < 8.7 / rg < 11）。
 }
 ```
 
-**Claude Code**
+填写 Windows 完整路径时，JSON 中的反斜杠要写成 `\\`，例如 `C:\\tools\\Fastsearch-MCP-Share\\.venv\\Scripts\\fastsearch-mcp.exe`。
+
+### Claude Code
 
 ```powershell
 claude mcp add fastsearch -s user -- fastsearch-mcp
 ```
 
-**Cursor**（`~/.cursor/mcp.json`）/ **Cline** / **Windsurf** / **Continue**：配置格式和 Claude Desktop 相同（`mcpServers` → `command` / `args` / `env`）。
+### Codex
 
-**OpenAI Codex CLI**（`~/.codex/config.toml`）
+在 `~/.codex/config.toml` 中添加：
 
 ```toml
 [mcp_servers.fastsearch]
 command = "fastsearch-mcp"
 ```
 
-**HTTP 方式**（给不支持 stdio 的客户端，或者多个 Agent 共用一个服务）：
+### 其他客户端
+
+Cursor 的配置文件是 `~/.cursor/mcp.json`，格式与上面的 Claude Desktop 示例相同。Cline 等客户端可以在 MCP 设置中填写启动命令。
+
+保存配置后，重新连接 MCP 或重启客户端。如果提示找不到 `fastsearch-mcp`，请改用程序的完整路径。
+
+## 开始使用
+
+连接成功后，直接告诉 AI 项目的完整路径和你要找的内容，例如：
+
+> 请使用 FastSearch，查看 C:/projects/my-game 的目录，再找到负责玩家移动的脚本。
+
+AI 可以根据问题选择下面的工具：
+
+| 工具 | 用途 |
+| --- | --- |
+| `tree` | 查看目录结构 |
+| `find_files` | 按文件名、类型、大小或修改时间找文件 |
+| `count_matches` | 看一个词在哪些文件中出现、各出现多少次 |
+| `search_text` | 搜索文件里的文字或代码 |
+| `read_lines` | 读取文件的指定几行 |
+| `decompile` | 将 .NET DLL 中的代码导出到本机，方便继续查找 |
+
+已知文件和行号时，可以直接读取，不必先搜索一遍。查 DLL 时，同一份 DLL 和同一版本的导出工具只需导出一次；DLL 更新后会生成新的副本。
+
+如果希望 AI 持续遵守搜索规则，可以把本仓库 [AGENTS.md](AGENTS.md) 中的规则加入项目的 `AGENTS.md`、`CLAUDE.md` 或客户端规则文件。这些规则用于指导 AI，不会拦截终端命令。
+
+## 常见问题
+
+**会修改我的文件吗？**
+
+搜索和读取不会修改原文件。DLL 导出的代码保存在 `%LOCALAPPDATA%/fastsearch-mcp/decompile`，旧副本不会自动清理。
+
+**为什么找不到文件或中文？**
+
+文件可能被忽略或隐藏了，可以让 AI 调整搜索范围，必要时包含这些文件。老项目中的中文搜不到时，可以让 AI 尝试 `encoding="gbk"`。同一个目录混有多种编码时，可能需要分开搜索。
+
+**结果不完整怎么办？**
+
+结果太多或搜索超时时，工具会提示只返回了部分内容，可以缩小范围后重试。没有匹配结果本身不代表工具出错。搜索支持关键词和正则表达式；正则写错时，`search_text` 会尝试按普通文字重新搜索，并在开头说明。
+
+**只能搜索当前项目吗？**
+
+没有额外的工作区路径限制，可以访问哪些文件取决于运行程序的系统权限。
+
+## 查看使用情况（仅开发版）
+
+开发版默认在本机记录调用时间、文件路径、查询内容、耗时和错误信息，不保存返回的源码正文，也不会自动上传或删除记录。分享版不包含这项功能。
+
+运行下面的命令，可以生成最近 30 天的离线报告：
 
 ```powershell
-fastsearch-mcp --transport streamable-http --port 8765   # http://127.0.0.1:8765/mcp
+fastsearch-mcp report --days 30
 ```
 
-如果在 Windows 上启动时提示找不到 `fastsearch-mcp`，把 `command` 改成它的完整路径，一般是 `C:\\Users\\<你>\\.local\\bin\\fastsearch-mcp.exe`。
+用浏览器打开命令输出的 HTML 文件，就能查看调用次数、耗时趋势、较慢的操作和具体参数。需要重新运行命令才能更新报告。默认记录位置是 `%LOCALAPPDATA%/fastsearch-mcp/usage.sqlite3`。
 
-## 环境变量
+如果不需要记录，可以在客户端的 MCP 环境变量设置中加入 `FASTSEARCH_TELEMETRY=0`，然后重新连接。记录写入失败不会中断搜索。
 
-| 变量 | 说明 | 默认 |
-| --- | --- | --- |
-| `FASTSEARCH_DEFAULT_ROOT` | 工具不传 `path`、或传相对路径时使用的根目录 | 无（这时必须传绝对路径） |
-| `FASTSEARCH_TIMEOUT` | 单次调用超时秒数，超时返回已拿到的部分结果 | `30` |
-| `FASTSEARCH_DEFAULT_EXCLUDES` | 逗号分隔的默认排除目录，设为空字符串表示不排除 | `.git,node_modules,__pycache__,.venv,venv,.mypy_cache,.pytest_cache,.tox,.idea,.vs,.gradle,.next,.nuxt` |
-| `FASTSEARCH_FD_PATH` / `FASTSEARCH_RG_PATH` | 指定 fd/rg 可执行文件路径 | 自动查找 |
-| `FASTSEARCH_FD_VERSION` / `FASTSEARCH_RG_VERSION` | 自动下载时用的版本 | `10.5.2` / `15.2.0` |
-| `FASTSEARCH_GITHUB_MIRROR` | GitHub 下载镜像前缀，例如 `https://ghfast.top/` | 无 |
-| `HTTPS_PROXY` | 下载 fd/rg 时使用的代理 | 无 |
-| `FASTSEARCH_NO_DOWNLOAD` | 设为 `1` 时禁止自动下载（适合离线或内网环境） | 无 |
-| `FASTSEARCH_CACHE_DIR` | 下载缓存目录 | `%LOCALAPPDATA%\fastsearch-mcp\bin` |
-| `FASTSEARCH_ILSPYCMD_PATH` | 指定 ilspycmd 可执行文件，优先于随包版本和 PATH | 随包 → PATH |
-| `FASTSEARCH_DECOMPILE_DIR` | 反编译快照目录（旧快照不自动清理，每个约 5 MB） | `%LOCALAPPDATA%\fastsearch-mcp\decompile` |
+开发版还可以抽取部分历史请求，用 PowerShell 执行类似操作，供你参考：
 
-## 让 Agent 优先用这些工具
-
-服务器 instructions 和工具描述要求受支持的文件操作使用 MCP。客户端仍需在 `CLAUDE.md` / `AGENTS.md` / `.cursorrules` 中明确规则；这些文字规则不等于终端执行拦截。可使用本仓库 [AGENTS.md](AGENTS.md) 或下列规则：
-
-```markdown
-## 搜索规范
-- 浏览目录、查找文件、统计匹配、搜索文本和读取文本文件，必须使用能完成该操作的 fastsearch MCP 工具。
-- 不得用 PowerShell/cmd/bash、直接调用 rg/fd 或 Python/Node 文件 API 绕过 MCP。
-- 空结果、截断、隐藏或被忽略的文件不是回退理由，先调整范围、限制、hidden/no_ignore 或编码。
-- 仅在工具缺失、连接失败、明确报错或能力不支持时，说明原因后对受影响的操作和路径回退，其他支持的操作继续使用 MCP。
-- 已知文件和行号时直接 read_lines；常见词先 count_matches 查看分布，无需机械执行所有步骤。
-- 构建、测试、Git、进程管理和文件编辑可使用终端或编辑工具。
-- 一律传绝对路径。中文老项目搜不到中文时，加上 encoding="gbk"。
+```powershell
+fastsearch-mcp compare --count 5 --days 30
 ```
 
-## 开发与测试
+再次生成报告后，可以在页面底部查看对照。两边的文件状态、搜索范围和处理方式可能不同，这些数据不能直接代表 AI 完成整个任务能快多少。测试数据和说明见 [验证记录](benchmarks/verification.md)。
+
+<details>
+<summary>更多设置</summary>
+
+通常不需要修改这些设置。有需要时，在客户端的 MCP 环境变量中填写。
+
+| 设置 | 作用 |
+| --- | --- |
+| `FASTSEARCH_TIMEOUT` | 搜索等待时间，默认 30 秒；DLL 导出单独限制为 300 秒 |
+| `FASTSEARCH_DEFAULT_ROOT` | 使用相对路径时，从哪个目录开始查找；工具调用仍建议填写完整路径 |
+| `FASTSEARCH_DEFAULT_EXCLUDES` | 默认跳过的目录名称，用逗号分隔；设为空字符串可取消默认排除 |
+| `FASTSEARCH_FD_PATH` / `FASTSEARCH_RG_PATH` | 手动指定 fd / ripgrep 的程序位置 |
+| `FASTSEARCH_ILSPYCMD_PATH` | 手动指定 DLL 导出工具的位置 |
+| `FASTSEARCH_NO_DOWNLOAD` | 设为 `1`，禁止自动下载 fd / ripgrep |
+| `FASTSEARCH_GITHUB_MIRROR` / `HTTPS_PROXY` | 下载时使用的镜像地址或代理 |
+| `FASTSEARCH_CACHE_DIR` | fd / ripgrep 自动下载后的保存目录 |
+| `FASTSEARCH_DECOMPILE_DIR` | DLL 代码的保存目录 |
+| `FASTSEARCH_TELEMETRY_DIR` | 开发版调用记录的保存目录 |
+
+多个 AI 助手需要共用一个本机服务时，可以这样启动，再把客户端连接地址设为 `http://127.0.0.1:8765/mcp`：
+
+```powershell
+fastsearch-mcp --transport streamable-http --port 8765
+```
+
+只需要匹配文件列表时，AI 可以使用 `search_text(..., output="files")`；只读取少量行且不需要文件总行数时，可以使用 `read_lines(..., count_total=false)`。搜索返回内容默认最多 24000 个字符，可以通过 `max_output_chars` 调整。
+
+</details>
+
+<details>
+<summary>开发、打包与更新</summary>
+
+### 测试
+
+在仓库根目录运行：
 
 ```powershell
 uv run python scripts/bundle.py fetch
 uv run --extra test pytest -q -p no:cacheprovider --basetemp="$env:TEMP/fs-test"
 ```
 
-临时目录放在仓库外，避免在工作区留下测试文件夹。测试会调用真实的 fd/rg 二进制，覆盖这些场景：gitignore（包括非 git 目录）、默认排除目录、隐藏文件、中文文件名、GBK 编码、CRLF、超长行裁剪、截断提示、多行匹配、二进制文件、旧路径限制变量不再生效、一次完整的 MCP stdio 往返调用，以及纯搜索部署版的生成与自检。已验证兼容 mcp SDK 1.x 和 2.x、ripgrep 13 和 15。每次推送到 GitHub 会在 Windows 上自动运行同样的测试（`.github/workflows/ci.yml`）。
+测试会检查实际搜索、中文和编码、结果限制、MCP 连接以及分享版生成等功能。推送到主分支或提交 PR 时，也会在 Windows 上自动运行测试。
 
-### 发布流程（自动）
+### 生成分享包
 
-发布由版本号驱动，不需要手动打标签或上传文件：
+```powershell
+uv run python scripts/bundle.py searchonly
+```
 
-1. 同时修改 `pyproject.toml` 和 `src/fastsearch_mcp/__init__.py` 里的版本号，测试通过后提交并推送到 `main`。
-2. `.github/workflows/release.yml` 在每次推送 `main` 时检查：该版本已有 Release 就跳过；没有则在 Windows 上测试、生成部署版、解压安装并运行包内 check.py，全部通过后创建 `v<版本号>` 标签和 GitHub Release，附上 `Fastsearch-MCP-Share.zip` 和 `.sha256` 校验文件，说明由 PR 和提交自动汇总。
-3. 版本号以 `aN` / `bN` / `rcN` / `devN` 结尾（如 `0.4.0rc1`）时发布为预发布版。两处版本号不一致时流程直接失败，不会发布。
-4. 也可以在 Actions 页面选择 release 工作流，点 “Run workflow” 手动触发，规则相同。
-5. 按下一节更新本机全局安装。
+生成的文件放在 `dist/`。分享版从主源码自动生成，会去掉调用记录和报告功能。随包程序的版本、下载地址和校验值列在 [bundled-binaries.json](bundled-binaries.json)，下载时会检查文件是否与记录一致，并附带上游许可证。
 
-本地预览部署版（不发布）：`uv run python scripts/bundle.py searchonly`，产物在 `dist/`。
+### 发布新版本
 
-### 更新本机全局安装
+同时更新 `pyproject.toml` 和 `src/fastsearch_mcp/__init__.py` 的版本号，测试通过后提交并推送到 `main`。GitHub 会自动测试、打包、安装自检，并创建对应版本的 Release，附上 ZIP 和校验文件。两处版本号不同会停止发布，已有的 Release 会跳过。
 
-运行中的服务会锁住安装目录，导致重装中途失败（os error 32）。先关闭所有启动 fastsearch 的客户端（Codex、Claude Code 等），确认 `Get-Process fastsearch-mcp -ErrorAction SilentlyContinue` 无输出，再在仓库根目录执行：
+带 `aN`、`bN`、`rcN` 或 `devN` 后缀的版本会标为预发布版。也可以在 GitHub Actions 页面手动运行 release 流程。
+
+### 更新本机安装
+
+Windows 上，运行中的服务可能占用安装文件。先关闭使用 FastSearch 的客户端，确认下面的命令没有输出，再进行更新：
+
+```powershell
+Get-Process fastsearch-mcp -ErrorAction SilentlyContinue
+```
+
+在仓库根目录执行：
 
 ```powershell
 uv run python scripts/bundle.py fetch
 uv tool install --force .
 fastsearch-mcp --doctor
-uv run python tests/installed_check.py    # 六个工具可用，五次读取写入临时使用记录后自动删除
+uv run python tests/installed_check.py
 ```
 
-如果重装失败后 `%APPDATA%\uv\tools\fastsearch-mcp\Lib\site-packages\fastsearch_mcp` 只剩 `__pycache__`，安装已被删除一半，新启动的客户端会失败。不要直接重试，先只写入、不删除地补回文件，再关闭客户端后重装：
+如果重装因文件被占用而中断，导致安装目录缺少文件，可以先在仓库根目录执行下面的命令补回文件，再关闭相关客户端后重新安装：
 
 ```powershell
-uv pip install --python "$env:APPDATA\uv\tools\fastsearch-mcp\Scripts\python.exe" .
+uv pip install --python "$env:APPDATA/uv/tools/fastsearch-mcp/Scripts/python.exe" .
 ```
 
-## 已知限制
+</details>
 
-- `search_text` 的 `encoding` 每次只能指定一种编码。如果一个仓库里 UTF-8 和 GBK 文件混在一起，需要分两次搜索。
-- 不设工作区路径白名单，所有操作遵循服务进程的操作系统访问权限。`FASTSEARCH_ALLOWED_ROOTS` 已移除，旧配置即使保留也不再生效。
-- 操作失败返回 MCP `isError=true` 和带错误分类的文本；空结果属于正常成功，截断与超时的部分结果仍需查看输出提示。
-- 正则使用 Rust regex 语法，不支持环视（lookaround）和反向引用。`search_text` 遇到无法解析的正则会改为字面量搜索并在首行说明，若本意是正则（如 `range_light_points*(`），按提示修正后重搜。
+## 许可证
 
-
-## 随机历史请求的 PowerShell 对照
-
-运行 `fastsearch-mcp compare --count 5 --days 30`，从最近使用记录中随机、不放回抽取最多 5 条可转换请求，每条执行一次 PowerShell 7。可用 `--seed 42` 复现抽样（前提是候选记录未改变），用 `--timeout 30` 设置每条执行上限。
-
-数据独立保存到日志目录的 `comparisons/时间-批次.json`，不会写回日常调用表。再运行 report 命令，页面底部按批次展示抽样对照；上方筛选不会改变独立批次内容。每批保留原记录 ID、参数、历史耗时、PowerShell 操作耗时与进程总耗时、结果数量、脚本、随机种子和跳过原因。
-
-第一版支持 read_lines、简单 find_files、无上下文的字面量 search_text；复杂参数、正则及失败历史记录会跳过，样本不足时使用全部候选记录。PowerShell 使用 Get-Content、Get-ChildItem、Select-String。参数通过 JSON 环境变量传递，不拼接为可执行脚本。
-
-这属于历史请求的常用命令对照，不保证两边工作量等价：文件、缓存、忽略目录、编码、二进制跳过和输出格式可能不同。历史未保存结果正文，所以数量相同也不能证明内容一致。页面不根据这些样本宣称总体提速。未使用历史原命令，而是生成对应 PowerShell 命令。
-
-## 随包二进制
-
-部署版和开发安装需要的 Windows x64 可执行文件（fd、rg、ilspycmd）及上游许可证由 [bundled-binaries.json](bundled-binaries.json) 固定版本、下载地址和 SHA-256，通过脚本下载校验后写入 `src/fastsearch_mcp/bin/`。该目录被 git 忽略，pyproject 的 hatch `artifacts` 保证它仍进入 wheel。运行时查找顺序：环境变量 → 随包 `bin/` → PATH →（fd/rg）下载缓存。
-
-```powershell
-uv run python scripts/bundle.py fetch              # 放进本仓库，开发安装与全局安装使用
-uv run python scripts/bundle.py searchonly         # 生成部署版时自动放进 dist/Fastsearch-MCP-Share
-```
-
-下载按哈希缓存在 `%LOCALAPPDATA%/fastsearch-mcp/bundle-cache`，支持 HTTPS_PROXY。ilspycmd 版本是快照目录名的一部分，升级后会重新导出。
+本项目使用 [MIT 许可证](LICENSE)。随包的第三方程序保留各自的许可证。
