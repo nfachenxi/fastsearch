@@ -1,5 +1,8 @@
 # FastSearch MCP
 
+[![powered by Codex](docs/assets/powered-by-codex.svg)](https://developers.openai.com/codex/)
+[![powered by Claude](https://img.shields.io/badge/powered_by-Claude-D97757?style=flat-square&logo=claude&logoColor=white)](https://claude.ai/)
+
 让 AI 助手更方便地查文件、搜代码、读内容，重点照顾 Windows 上的使用体验。
 
 你只需要像平时一样告诉 AI 要找什么。连接 FastSearch MCP 后，AI 就能使用这里的工具完成搜索，不必每次临时编写搜索命令。MCP 是 AI 助手连接外部工具的一种方式。
