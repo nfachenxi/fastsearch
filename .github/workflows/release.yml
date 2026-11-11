@@ -61,7 +61,8 @@ jobs:
         run: |
           uv run python scripts/bundle.py searchonly
           $hash = (Get-FileHash dist/Fastsearch-MCP-Share.zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  Fastsearch-MCP-Share.zip" | Out-File -Encoding ascii dist/Fastsearch-MCP-Share.zip.sha256
+          # LF line ending so `sha256sum -c` also works on Linux/macOS.
+          [IO.File]::WriteAllText((Join-Path $PWD 'dist/Fastsearch-MCP-Share.zip.sha256'), "$hash  Fastsearch-MCP-Share.zip`n")
           Get-Content dist/Fastsearch-MCP-Share.zip.sha256
 
       - name: Install and self-check the package as a user would
